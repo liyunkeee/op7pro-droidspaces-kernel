@@ -94,7 +94,7 @@ echo "[+] Fix: MODULE_SIG_FORCE disabled"
 
 # Fix 10: Clang 拒绝尖括号相对路径 include (GCC 接受)
 #        例: #include <../sched/sched.h> -> #include "../sched/sched.h"
-#        扫描全源码树所有 .c/.h 文件修复
+#        注意: 只替换整个路径以 ./ 或 ../ 开头且以 .h/.c/.S 等结尾的完整 include
 python3 - <<'PYEOF'
 import re
 from pathlib import Path
@@ -108,8 +108,8 @@ for path in Path(".").rglob("*"):
         text = path.read_text(errors="ignore")
     except Exception:
         continue
-    # 匹配 <../xxx> 或 <./xxx> 形式的 include
-    new = re.sub(r'#include\s+<(\.\.?/[^\"]*)>', r'#include "\1"', text)
+    # 只匹配 <../xxx.h> 或 <./xxx.h> (路径只含字母数字/点/下划线/连字符/斜杠)
+    new = re.sub(r'#(\s*)include\s+<(\.{1,2}/[A-Za-z0-9_./-]+)>', r'#\1include "\2"', text)
     if new != text:
         path.write_text(new)
         count += 1
