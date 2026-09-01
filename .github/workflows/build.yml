@@ -131,7 +131,7 @@ jobs:
           --enable  OPLUS_HEALTHINFO \
           --disable ANDROID_PARANOID_NETWORK \
           --set-str LOCALVERSION "-Droidspaces-KSU"
-        make ARCH=arm64 CC=clang \
+        make ARCH=arm64 CC=clang O=out \
           CROSS_COMPILE=aarch64-linux-android- \
           CROSS_COMPILE_ARM32=arm-linux-androideabi- \
           CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -143,7 +143,7 @@ jobs:
         export PATH="$GITHUB_WORKSPACE/clang-14/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
         export TARGET_PRODUCT=msmnile
         export BRAND_SHOW_FLAG=oneplus
-        make ARCH=arm64 \
+        make ARCH=arm64 O=out \
           CC=clang \
           CROSS_COMPILE=aarch64-linux-android- \
           CROSS_COMPILE_ARM32=arm-linux-androideabi- \
@@ -154,13 +154,13 @@ jobs:
           -j$(nproc) 2>&1 | tee build.log
         echo "=== 最后 20 行 ==="
         tail -20 build.log
-        ls -la arch/arm64/boot/
+        ls -la out/arch/arm64/boot/
 
     - name: Package AnyKernel3 (刷机包)
       run: |
         git clone --depth=1 https://github.com/osm0sis/AnyKernel3 anykernel
         cd anykernel
-        cp ../kernel/arch/arm64/boot/Image.gz-dtb . 2>/dev/null || cp ../kernel/arch/arm64/boot/Image.gz . || cp ../kernel/arch/arm64/boot/Image .
+        cp ../kernel/out/arch/arm64/boot/Image.gz-dtb . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image.gz . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image .
         # 通用配置: 关闭机型检测, A/B 分区
         sed -i 's/do.devicecheck=1/do.devicecheck=0/' anykernel.sh
         sed -i 's/IS_SLOT_DEVICE=0/IS_SLOT_DEVICE=1/' anykernel.sh
