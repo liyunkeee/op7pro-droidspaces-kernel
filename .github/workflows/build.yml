@@ -87,6 +87,10 @@ jobs:
       run: |
         cd kernel
         export PATH="$GITHUB_WORKSPACE/clang-14/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
+        # 关键: OPLUS 源码的 OplusKernelEnvConfig.mk 依赖 TARGET_PRODUCT 生成 OPLUS_* 宏
+        # (如 OPLUS_FEATURE_HEALTHINFO), 缺失会导致 in_flight 等成员不存在 (编译报错)
+        export TARGET_PRODUCT=msmnile
+        export BRAND_SHOW_FLAG=oneplus
         # 使用从手机提取的当前内核配置作为基础 (保留酷安内核全部调优)
         cp ../kernel-config-base .config
         # CC_STACKPROTECTOR_STRONG: Clang 编译会报错 (借鉴 charan-gn 的修复)
@@ -136,6 +140,8 @@ jobs:
       run: |
         cd kernel
         export PATH="$GITHUB_WORKSPACE/clang-14/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
+        export TARGET_PRODUCT=msmnile
+        export BRAND_SHOW_FLAG=oneplus
         make ARCH=arm64 \
           CC=clang \
           CROSS_COMPILE=aarch64-linux-android- \
