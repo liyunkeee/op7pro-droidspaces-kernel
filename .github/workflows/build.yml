@@ -141,7 +141,8 @@ jobs:
           CROSS_COMPILE=aarch64-linux-android- \
           CROSS_COMPILE_ARM32=arm-linux-androideabi- \
           CLANG_TRIPLE=aarch64-linux-gnu- \
-          LD=ld.lld AR=ar.lld NM=llvm-nm STRIP=llvm-strip \
+          LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip \
+          OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf \
           KCFLAGS="-Wno-error -U__FORTIFY_SOURCE" \
           -j$(nproc) 2>&1 | tee build.log
         echo "=== 最后 20 行 ==="
