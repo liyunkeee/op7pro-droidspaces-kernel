@@ -1,0 +1,163 @@
+name: Build OP7Pro 4.14.180 Kernel (KSU-Next + Droidspaces)
+
+on:
+  workflow_dispatch:
+    inputs:
+      localversion:
+        description: '内核版本后缀'
+        required: false
+        default: '-Droidspaces-KSU'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout this repo
+      uses: actions/checkout@v4
+
+    - name: Free disk & install dependencies
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/share/swift /opt/ghc 2>/dev/null
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev \
+          xz-utils git bison flex libelf-dev python3 zip ccache
+
+    - name: Download toolchains
+      run: |
+        # Clang 14 (r416183b) — LineageOS 验证过的版本,兼容 2019 高通源码
+        git clone --depth=1 -b lineage-20.0 \
+          https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b \
+          clang-14
+        # GCC 交叉编译 (aarch64 + arm32)
+        git clone --depth=1 \
+          https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 \
+          gcc-64
+        git clone --depth=1 \
+          https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
+          gcc-32
+
+    - name: Clone OnePlusOSS 12.1 kernel source (4.14.180, 与手机同版本)
+      run: |
+        git clone --depth=1 -b oneplus/sm8150_s_12.1_op7pro \
+          https://github.com/OnePlusOSS/android_kernel_oneplus_sm8150 \
+          kernel
+
+    - name: Clone KernelSU-Next (legacy branch, for 4.14)
+      run: |
+        git clone --depth=1 -b legacy \
+          https://github.com/rifsxd/KernelSU-Next \
+          ksu-next
+
+    - name: Apply patches (KSU hooks + Droidspaces official patches)
+      run: |
+        cd kernel
+        # ---- KernelSU-Next 集成 (legacy, manual hooks for 4.14) ----
+        cp -r ../ksu-next/KernelSU KernelSU
+        patch -p1 --forward < ../patches/manual-hooks.patch
+        # 注册 KernelSU 进内核构建系统 (manual-hooks.patch 不包含这部分)
+        grep -q 'kernelsu' drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+        grep -q 'kernelsu' drivers/Kconfig || echo 'source "drivers/kernelsu/Kconfig"' >> drivers/Kconfig
+        # 确认 KernelSU 里有 Kconfig (KernelSU-Next legacy 应该自带)
+        test -f KernelSU/kernel/Kconfig && echo "OK: KernelSU/kernel/Kconfig exists" || echo "WARN: Kconfig path check"
+        ls KernelSU/kernel/ | head -5
+        # ---- Droidspaces 官方 non-GKI 补丁 ----
+        # 1. 修复 xt_qtaguid 内核 panic (容器网络场景)
+        patch -p1 --forward < ../patches/01.fix_kernel_panic_in_xt_qtaguid.patch
+        # 2. 恢复 cgroup 前缀文件 (systemd 容器兼容)
+        patch -p1 --forward < ../patches/02.fix_restore_cgroup.patch
+        # ---- 工具链兼容性修复 ----
+        bash ../scripts/build-fixes.sh
+
+    - name: Configure kernel (base = 你手机当前 4.14.180 的 config)
+      run: |
+        cd kernel
+        # 使用从手机提取的当前内核配置作为基础 (保留酷安内核全部调优)
+        cp ../kernel-config-base .config
+        # 叠加 Droidspaces 所需配置
+        cat ../patches/droidspaces.config >> .config
+        scripts/config \
+          --enable  SYSVIPC \
+          --enable  POSIX_MQUEUE \
+          --enable  PID_NS \
+          --enable  IPC_NS \
+          --enable  UTS_NS \
+          --enable  USER_NS \
+          --enable  CGROUP_PIDS \
+          --enable  CGROUP_DEVICE \
+          --enable  CGROUP_NET_PRIO \
+          --enable  DEVTMPFS \
+          --enable  DEVTMPFS_MOUNT \
+          --enable  OVERLAY_FS \
+          --enable  VETH \
+          --enable  BRIDGE \
+          --enable  BRIDGE_NETFILTER \
+          --enable  NF_TABLES \
+          --enable  NETFILTER_ADVANCED \
+          --enable  IP_NF_FILTER \
+          --enable  NETFILTER_XT_TARGET_MASQUERADE \
+          --enable  NETFILTER_XT_TARGET_TCPMSS \
+          --enable  NETFILTER_XT_MATCH_ADDRTYPE \
+          --enable  NF_CONNTRACK_NETLINK \
+          --enable  NF_NAT_REDIRECT \
+          --enable  TMPFS_XATTR \
+          --enable  TMPFS_POSIX_ACL \
+          --enable  ANDROID_BINDERFS \
+          --enable  IKCONFIG \
+          --enable  IKCONFIG_PROC \
+          --enable  KSU \
+          --disable ANDROID_PARANOID_NETWORK \
+          --set-str LOCALVERSION "-Droidspaces-KSU"
+        make ARCH=arm64 CC=clang \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          olddefconfig
+
+    - name: Build kernel
+      run: |
+        cd kernel
+        export PATH="$GITHUB_WORKSPACE/clang-14/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
+        make ARCH=arm64 \
+          CC=clang \
+          CROSS_COMPILE=aarch64-linux-android- \
+          CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          LD=ld.lld AR=ar.lld NM=llvm-nm STRIP=llvm-strip \
+          KCFLAGS="-Wno-error -U__FORTIFY_SOURCE" \
+          -j$(nproc) 2>&1 | tee build.log
+        echo "=== 最后 20 行 ==="
+        tail -20 build.log
+        ls -la arch/arm64/boot/
+
+    - name: Package AnyKernel3 (刷机包)
+      run: |
+        git clone --depth=1 https://github.com/osm0sis/AnyKernel3 anykernel
+        cd anykernel
+        cp ../kernel/arch/arm64/boot/Image.gz-dtb . 2>/dev/null || cp ../kernel/arch/arm64/boot/Image.gz . || cp ../kernel/arch/arm64/boot/Image .
+        # 通用配置: 关闭机型检测, A/B 分区
+        sed -i 's/do.devicecheck=1/do.devicecheck=0/' anykernel.sh
+        sed -i 's/IS_SLOT_DEVICE=0/IS_SLOT_DEVICE=1/' anykernel.sh
+        sed -i 's/block=auto\/block\/bootdevice\/dev\/by-name\/boot/block=auto\/dev\/block\/bootdevice\/by-name\/boot/' anykernel.sh
+        rm -rf .git .github
+        zip -r9 AnyKernel3-op7pro-droidspaces-ksu.zip *
+        cp AnyKernel3-op7pro-droidspaces-ksu.zip ..
+
+    - name: Upload artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: op7pro-droidspaces-kernel
+        path: |
+          AnyKernel3-op7pro-droidspaces-ksu.zip
+          kernel/kernel-config-base
+          kernel/.config
+        if-no-files-found: warn
+
+    - name: Upload build log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: kernel/build.log
+        if-no-files-found: warn
