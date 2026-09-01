@@ -138,6 +138,7 @@ jobs:
           --enable  OPLUS_COMMON_SOFT \
           --enable  OPLUS_DEVICE_IFNO \
           --enable  OPLUS_HANS \
+          --disable MODVERSIONS \
           --disable ANDROID_PARANOID_NETWORK \
           --set-str LOCALVERSION "-Droidspaces-KSU"
         make ARCH=arm64 CC=clang O=out \
