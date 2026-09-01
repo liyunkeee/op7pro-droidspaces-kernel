@@ -42,6 +42,14 @@ jobs:
         git clone --depth=1 -b oneplus/sm8150_s_12.1_op7pro \
           https://github.com/OnePlusOSS/android_kernel_oneplus_sm8150 \
           kernel
+        # 关键: 内核源码里有 41 个 symlink 指向 vendor/oplus/kernel (仓库外)
+        # OnePlusOSS 提供配套的 kernel_modules_and_devicetree 仓库, 内含完整 vendor/
+        # 必须将 vendor 放到 kernel 源码的上级目录 (与 kernel/ 同级), symlink 才能解析
+        git clone --depth=1 -b oneplus/sm8150_s_12.1_op7pro \
+          https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8150 \
+          modules-repo
+        mv modules-repo/vendor vendor
+        ls vendor/oplus/kernel/oplus_performance/oplus_foreground_io_opt/ || (echo "[FATAL] vendor 放置失败"; exit 1)
     - name: Clone KernelSU-Next (legacy branch, for 4.14)
       run: |
         git clone --depth=1 -b legacy \
@@ -75,6 +83,7 @@ jobs:
     - name: Configure kernel (base = 你手机当前 4.14.180 的 config)
       run: |
         cd kernel
+        export PATH="$GITHUB_WORKSPACE/clang-14/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
         # 使用从手机提取的当前内核配置作为基础 (保留酷安内核全部调优)
         cp ../kernel-config-base .config
         # CC_STACKPROTECTOR_STRONG: Clang 编译会报错 (借鉴 charan-gn 的修复)
