@@ -92,4 +92,28 @@ sed -i 's/CONFIG_MODULE_SIG_FORCE=y/# CONFIG_MODULE_SIG_FORCE is not set/' \
   arch/arm64/configs/vendor/sm8150-perf_defconfig
 echo "[+] Fix: MODULE_SIG_FORCE disabled"
 
+# Fix 10: Clang 拒绝尖括号相对路径 include (GCC 接受)
+#        例: #include <../sched/sched.h> -> #include "../sched/sched.h"
+#        扫描全源码树所有 .c/.h 文件修复
+python3 - <<'PYEOF'
+import re
+from pathlib import Path
+count = 0
+for path in Path(".").rglob("*"):
+    if path.suffix not in (".c", ".h", ".S"):
+        continue
+    if "out" in path.parts:
+        continue
+    try:
+        text = path.read_text(errors="ignore")
+    except Exception:
+        continue
+    # 匹配 <../xxx> 或 <./xxx> 形式的 include
+    new = re.sub(r'#include\s+<(\.\.?/[^\"]*)>', r'#include "\1"', text)
+    if new != text:
+        path.write_text(new)
+        count += 1
+print(f"[+] Fix 10: fixed {count} files with relative-path angle-bracket includes")
+PYEOF
+
 echo "[*] All toolchain build fixes applied."
