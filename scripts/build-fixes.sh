@@ -116,4 +116,28 @@ for path in Path(".").rglob("*"):
 print(f"[+] Fix 10: fixed {count} files with relative-path angle-bracket includes")
 PYEOF
 
+
+# Fix 11: hardcoded 'kernel/msm-4.14/' include paths in oplus charger_ic
+# (OnePlus source assumes tree layout 'kernel/msm-4.14' parallel to vendor/,
+#  but our kernel source root IS the msm-4.14 tree. Rewrite relative includes
+#  to point at the in-tree drivers/power/supply/qcom/ copies.)
+python3 - << 'PYEOF'
+import re
+from pathlib import Path
+base = Path("drivers/power/oplus/charger_ic")
+count = 0
+if base.exists():
+    for path in base.iterdir():
+        if path.suffix not in (".c", ".h"):
+            continue
+        text = path.read_text(errors="ignore")
+        new = re.sub(
+            r'#(\s*)include\s+"(?:\.{2}/)+kernel/msm-4\.14/drivers/power/supply/qcom/(.*)"',
+            r'#\1include "../../supply/qcom/\2"',
+            text)
+        if new != text:
+            path.write_text(new)
+            count += 1
+print(f"[+] Fix 11: rewrote {count} files with hardcoded kernel/msm-4.14 paths")
+PYEOF
 echo "[*] All toolchain build fixes applied."
