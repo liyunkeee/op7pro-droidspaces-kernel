@@ -42,7 +42,6 @@ jobs:
         git clone --depth=1 -b oneplus/sm8150_s_12.1_op7pro \
           https://github.com/OnePlusOSS/android_kernel_oneplus_sm8150 \
           kernel
-
     - name: Clone KernelSU-Next (legacy branch, for 4.14)
       run: |
         git clone --depth=1 -b legacy \
@@ -52,15 +51,15 @@ jobs:
     - name: Apply patches (KSU hooks + Droidspaces official patches)
       run: |
         cd kernel
-        # ---- KernelSU-Next 集成 (legacy, manual hooks for 4.14) ----
-        cp -r ../ksu-next/KernelSU KernelSU
+        # ---- KernelSU-Next 集成 (legacy 分支, 官方 setup.sh 方式) ----
+        # KSU-Next 结构: kernel/ 是内核模块源码, 官方脚本将其链入 drivers/kernelsu
+        git clone --depth=1 https://github.com/rifsxd/KernelSU-Next ../KernelSU-Next
+        cp -r ../KernelSU-Next/kernel KernelSU
+        rm -f KernelSU/setup.sh
         patch -p1 --forward < ../patches/manual-hooks.patch
-        # 注册 KernelSU 进内核构建系统 (manual-hooks.patch 不包含这部分)
+        # 注册进构建系统 (等效 setup.sh 做的事)
         grep -q 'kernelsu' drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
         grep -q 'kernelsu' drivers/Kconfig || echo 'source "drivers/kernelsu/Kconfig"' >> drivers/Kconfig
-        # 确认 KernelSU 里有 Kconfig (KernelSU-Next legacy 应该自带)
-        test -f KernelSU/kernel/Kconfig && echo "OK: KernelSU/kernel/Kconfig exists" || echo "WARN: Kconfig path check"
-        ls KernelSU/kernel/ | head -5
         # ---- Droidspaces 官方 non-GKI 补丁 ----
         # 1. 修复 xt_qtaguid 内核 panic (容器网络场景)
         patch -p1 --forward < ../patches/01.fix_kernel_panic_in_xt_qtaguid.patch
@@ -74,6 +73,9 @@ jobs:
         cd kernel
         # 使用从手机提取的当前内核配置作为基础 (保留酷安内核全部调优)
         cp ../kernel-config-base .config
+        # CC_STACKPROTECTOR_STRONG: Clang 编译会报错 (借鉴 charan-gn 的修复)
+        sed -i '/CONFIG_CC_STACKPROTECTOR_STRONG/d' .config
+        scripts/config --enable CC_STACKPROTECTOR_NONE
         # 叠加 Droidspaces 所需配置
         cat ../patches/droidspaces.config >> .config
         scripts/config \
