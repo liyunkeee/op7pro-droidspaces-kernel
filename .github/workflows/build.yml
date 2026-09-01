@@ -61,10 +61,14 @@ jobs:
         grep -q 'kernelsu' drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
         grep -q 'kernelsu' drivers/Kconfig || echo 'source "drivers/kernelsu/Kconfig"' >> drivers/Kconfig
         # ---- Droidspaces 官方 non-GKI 补丁 ----
-        # 1. 修复 xt_qtaguid 内核 panic (容器网络场景)
-        patch -p1 --forward < ../patches/01.fix_kernel_panic_in_xt_qtaguid.patch
+        # 1. 修复 xt_qtaguid 内核 panic (仅 Android 9/10 内核有此文件, S(12)源码已移除)
+        if [ -f net/netfilter/xt_qtaguid.c ]; then
+          patch -p1 --forward < ../patches/01.fix_kernel_panic_in_xt_qtaguid.patch || true
+        else
+          echo "[INFO] xt_qtaguid.c 不存在 (Android 12 源码已移除), 跳过补丁 1"
+        fi
         # 2. 恢复 cgroup 前缀文件 (systemd 容器兼容)
-        patch -p1 --forward < ../patches/02.fix_restore_cgroup.patch
+        patch -p1 --forward < ../patches/02.fix_restore_cgroup.patch || true
         # ---- 工具链兼容性修复 ----
         bash ../scripts/build-fixes.sh
 
