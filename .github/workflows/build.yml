@@ -62,10 +62,11 @@ jobs:
       run: |
         cd kernel
         # ---- KernelSU-Next 集成 (legacy 分支, 官方 setup.sh 方式) ----
-        # KSU-Next 结构: kernel/ 是内核模块源码, 官方脚本将其链入 drivers/kernelsu
+        # KSU-Next 结构: kernel/ 是内核模块源码, 集成到 drivers/kernelsu/
         git clone --depth=1 https://github.com/rifsxd/KernelSU-Next ../KernelSU-Next
-        cp -r ../KernelSU-Next/kernel KernelSU
-        rm -f KernelSU/setup.sh
+        rm -rf drivers/kernelsu
+        cp -r ../KernelSU-Next/kernel drivers/kernelsu
+        rm -f drivers/kernelsu/setup.sh
         patch -p1 --forward < ../patches/manual-hooks.patch
         # 注册进构建系统 (等效 setup.sh 做的事)
         grep -q 'kernelsu' drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
