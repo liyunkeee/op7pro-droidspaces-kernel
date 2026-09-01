@@ -128,6 +128,7 @@ jobs:
           --enable  IKCONFIG \
           --enable  IKCONFIG_PROC \
           --enable  KSU \
+          --enable  OPLUS_HEALTHINFO \
           --disable ANDROID_PARANOID_NETWORK \
           --set-str LOCALVERSION "-Droidspaces-KSU"
         make ARCH=arm64 CC=clang \
