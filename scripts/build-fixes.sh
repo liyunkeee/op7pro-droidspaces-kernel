@@ -43,13 +43,6 @@ sed -i 's/struct selinux_state selinux_state __rticdata;/struct selinux_state se
   security/selinux/hooks.c
 echo "[+] Fix 3: selinux_state __rticdata removed"
 
-# Fix 7: event_timer timerqueue_head init (CVE-2021-20317 changed struct)
-if grep -q '\.head = RB_ROOT' drivers/soc/qcom/event_timer.c 2>/dev/null; then
-  sed -i 's/\.head = RB_ROOT,/.rb_root = RB_ROOT_CACHED,/' drivers/soc/qcom/event_timer.c
-  sed -i '/\.next = NULL,/d' drivers/soc/qcom/event_timer.c
-  echo "[+] Fix 7: event_timer init"
-fi
-
 # Fix 8: KALLSYMS_BASE_RELATIVE overflow (large kernel image with security patches)
 sed -i 's/default !IA64 && !(TILE && 64BIT)/default n/' init/Kconfig
 echo "[+] Fix 8: KALLSYMS_BASE_RELATIVE disabled"
