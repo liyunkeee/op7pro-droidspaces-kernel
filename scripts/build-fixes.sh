@@ -140,4 +140,30 @@ if base.exists():
             count += 1
 print(f"[+] Fix 11: rewrote {count} files with hardcoded kernel/msm-4.14 paths")
 PYEOF
+
+
+# Fix 12: oplus_healthinfo.c references 'ionwait_para' which is only defined
+# in non-open-sourced OPLUS ION code. Insert a static zeroed struct so the
+# ion_wait proc node just prints zeros (harmless debug interface).
+python3 - << 'FIX12EOF'
+from pathlib import Path
+p = Path("drivers/soc/oplus/oplus_healthinfo/oplus_healthinfo.c")
+if p.exists():
+    text = p.read_text(errors="ignore")
+    if "ionwait_para" in text and "static struct ion_wait_para ionwait_para" not in text:
+        marker = "static ssize_t ion_wait_read("
+        if marker in text:
+            text = text.replace(
+                marker,
+                "static struct ion_wait_para ionwait_para;\n\n" + marker,
+                1)
+            p.write_text(text)
+            print("[+] Fix 12: added static ionwait_para definition")
+        else:
+            print("[!] Fix 12: marker not found, skipping")
+    else:
+        print("[+] Fix 12: not needed")
+else:
+    print("[!] Fix 12: oplus_healthinfo.c not found")
+FIX12EOF
 echo "[*] All toolchain build fixes applied."
