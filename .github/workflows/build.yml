@@ -91,14 +91,17 @@ jobs:
         # (如 OPLUS_FEATURE_HEALTHINFO), 缺失会导致 in_flight 等成员不存在 (编译报错)
         export TARGET_PRODUCT=msmnile
         export BRAND_SHOW_FLAG=oneplus
+        # 全程树外 (O=out): 源码树保持干净, 否则 make O=out 报 "not clean"
+        mkdir -p out
         # 使用从手机提取的当前内核配置作为基础 (保留酷安内核全部调优)
-        cp ../kernel-config-base .config
+        cp ../kernel-config-base out/.config
         # CC_STACKPROTECTOR_STRONG: Clang 编译会报错 (借鉴 charan-gn 的修复)
-        sed -i '/CONFIG_CC_STACKPROTECTOR_STRONG/d' .config
-        scripts/config --enable CC_STACKPROTECTOR_NONE
+        sed -i '/CONFIG_CC_STACKPROTECTOR_STRONG/d' out/.config
         # 叠加 Droidspaces 所需配置
-        cat ../patches/droidspaces.config >> .config
-        scripts/config \
+        cat ../patches/droidspaces.config >> out/.config
+        # scripts/config 支持指定 .config 路径
+        ./scripts/config --file out/.config \
+          --enable  CC_STACKPROTECTOR_NONE \
           --enable  SYSVIPC \
           --enable  POSIX_MQUEUE \
           --enable  PID_NS \
@@ -177,7 +180,7 @@ jobs:
         path: |
           AnyKernel3-op7pro-droidspaces-ksu.zip
           kernel/kernel-config-base
-          kernel/.config
+          kernel/out/.config
         if-no-files-found: warn
 
     - name: Upload build log
