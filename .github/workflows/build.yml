@@ -64,11 +64,20 @@ jobs:
         # ---- KernelSU-Next 集成 (legacy 分支, 官方 setup.sh 方式) ----
         # KSU-Next 结构: kernel/ 是内核模块源码, 集成到 drivers/kernelsu/
         # 注意: 仓库根的 uapi/ 目录也是必需的 (policy/*.h 会 include uapi/*.h)
-        git clone --depth=1 -b legacy https://github.com/rifsxd/KernelSU-Next ../KernelSU-Next
+        git clone -b legacy https://github.com/rifsxd/KernelSU-Next ../KernelSU-Next
         rm -rf drivers/kernelsu
         cp -r ../KernelSU-Next/kernel drivers/kernelsu
         cp -r ../KernelSU-Next/uapi drivers/kernelsu/uapi
         rm -f drivers/kernelsu/setup.sh
+        # Inject real KSU version: Kbuild computes it from KSU's own git repo,
+        # but the cp above strips .git, so it would fall back to version 1
+        # (too old for the manager app). Compute and inject explicitly.
+        KSU_COMMITS=$(git -C ../KernelSU-Next rev-list --count HEAD)
+        KSU_VER=$((30000 + KSU_COMMITS + 200))
+        KSU_TAG=$(git -C ../KernelSU-Next describe --tags --abbrev=0 2>/dev/null || echo v3.2.0)
+        sed -i "s/KSU_VERSION_FALLBACK := 1/KSU_VERSION_FALLBACK := $KSU_VER/" drivers/kernelsu/Kbuild
+        sed -i "s/KSU_VERSION_TAG_FALLBACK := v0.0.1/KSU_VERSION_TAG_FALLBACK := $KSU_TAG/" drivers/kernelsu/Kbuild
+        echo "KSU version injected: $KSU_VER (tag: $KSU_TAG, commits: $KSU_COMMITS)"
         patch -p1 --forward < ../patches/manual-hooks.patch
         # 注册进构建系统 (等效 setup.sh 做的事)
         grep -q 'kernelsu' drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
