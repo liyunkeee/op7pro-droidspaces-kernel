@@ -189,7 +189,7 @@ jobs:
         # 但真机 boot 分区里当前运行的内核是标准 arm64 头(无此头)。
         # 剥离该头, 与已验证可开机的格式保持一致
         for img in Image.gz-dtb Image-dtb Image.gz Image; do
-          if [ -f "$img" ] && [ "$(head -c 15 "$img")" = "UNCOMPRESSED_IMG" ]; then
+          if [ -f "$img" ] && [ "$(head -c 16 "$img")" = "UNCOMPRESSED_IMG" ]; then
             echo "stripping 20-byte OPLUS header from $img"
             tail -c +21 "$img" > "$img.stripped" && mv "$img.stripped" "$img"
             head -c 4 "$img" | od -A n -t x1
