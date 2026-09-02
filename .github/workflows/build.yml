@@ -184,6 +184,40 @@ jobs:
       run: |
         git clone --depth=1 https://github.com/osm0sis/AnyKernel3 anykernel
         cd anykernel
+        # 不使用 AnyKernel3 upstream 默认的 Nexus/OMAP 模板。
+        # OP7 Pro guacamole 专用脚本：只替换 boot 内核，保留原 ramdisk。
+        cat > anykernel.sh <<'AKEOF'
+          ### AnyKernel3 Ramdisk Mod Script
+          ## OP7 Pro guacamole template
+          ### AnyKernel setup
+          properties() {
+          kernel.string=guacamole-droidspaces-kernel
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=guacamole
+          device.name2=guacamoleb
+          device.name3=guacamolet
+          device.name4=
+          device.name5=
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          }
+          boot_attributes() {
+          set_perm_recursive 0 0 755 644 $RAMDISK/*
+          set_perm_recursive 0 0 750 750 $RAMDISK/init* $RAMDISK/sbin
+          }
+          BLOCK=/dev/block/bootdevice/by-name/boot
+          IS_SLOT_DEVICE=1
+          RAMDISK_COMPRESSION=auto
+          PATCH_VBMETA_FLAG=auto
+          . tools/ak3-core.sh
+          dump_boot
+          write_boot
+        AKEOF
         cp ../kernel/out/arch/arm64/boot/Image.gz-dtb . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image-dtb . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image.gz . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image .
         # OPLUS 源码会给 Image-dtb 加 20 字节 "UNCOMPRESSED_IMG" 头,
         # 但真机 boot 分区里当前运行的内核是标准 arm64 头(无此头)。
