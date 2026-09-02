@@ -25,10 +25,11 @@ jobs:
 
     - name: Download toolchains
       run: |
-        # Clang 14 (r416183b) — LineageOS 验证过的版本,兼容 2019 高通源码
-        git clone --depth=1 -b lineage-20.0 \
-          https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b \
-          clang-14
+        # Clang 11 (r383902b) — 与原厂内核同一代 (原厂: clang 11.0.0)
+        # Run#35 实测: Clang14+ld.lld 产物开机即 CrashDump, 换回原厂代际工具链
+        git clone --depth=1 \
+          https://github.com/Minha-D/clang-r383902b \
+          clang-11
         # GCC 交叉编译 (aarch64 + arm32)
         git clone --depth=1 \
           https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 \
@@ -97,7 +98,7 @@ jobs:
     - name: Configure kernel (base = 你手机当前 4.14.180 的 config)
       run: |
         cd kernel
-        export PATH="$GITHUB_WORKSPACE/clang-14/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
+        export PATH="$GITHUB_WORKSPACE/clang-11/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
         # 关键: OPLUS 源码的 OplusKernelEnvConfig.mk 依赖 TARGET_PRODUCT 生成 OPLUS_* 宏
         # (如 OPLUS_FEATURE_HEALTHINFO), 缺失会导致 in_flight 等成员不存在 (编译报错)
         export TARGET_PRODUCT=msmnile
@@ -106,13 +107,14 @@ jobs:
         mkdir -p out
         # 使用从手机提取的当前内核配置作为基础 (保留酷安内核全部调优)
         cp ../kernel-config-base out/.config
-        # CC_STACKPROTECTOR_STRONG: Clang 编译会报错 (借鉴 charan-gn 的修复)
-        sed -i '/CONFIG_CC_STACKPROTECTOR_STRONG/d' out/.config
+        # 恢复原厂栈保护: 你当前内核 CONFIG_CC_STACKPROTECTOR_STRONG=y,
+        # 运行正常, 且 STRONG 不与 Clang 11 冲突 (当年冲突的是 Clang 14)
+        ./scripts/config --file out/.config --enable CC_STACKPROTECTOR_STRONG
+        ./scripts/config --file out/.config --disable CC_STACKPROTECTOR_NONE
         # 叠加 Droidspaces 所需配置
         cat ../patches/droidspaces.config >> out/.config
         # scripts/config 支持指定 .config 路径
         ./scripts/config --file out/.config \
-          --enable  CC_STACKPROTECTOR_NONE \
           --enable  SYSVIPC \
           --enable  POSIX_MQUEUE \
           --enable  PID_NS \
@@ -159,15 +161,18 @@ jobs:
     - name: Build kernel
       run: |
         cd kernel
-        export PATH="$GITHUB_WORKSPACE/clang-14/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
+        export PATH="$GITHUB_WORKSPACE/clang-11/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
         export TARGET_PRODUCT=msmnile
         export BRAND_SHOW_FLAG=oneplus
+        # GNU ld (Binutils 2.27, gcc-4.9 交叉工具链自带) 替代 ld.lld:
+        # 原厂内核即 Clang 11 + GNU ld 2.27 组合, 该组合已在这台设备上验证可开机
         make ARCH=arm64 O=out \
           CC=clang \
           CROSS_COMPILE=aarch64-linux-android- \
           CROSS_COMPILE_ARM32=arm-linux-androideabi- \
           CLANG_TRIPLE=aarch64-linux-gnu- \
-          LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip \
+          LD=aarch64-linux-android-ld \
+          AR=llvm-ar NM=llvm-nm STRIP=llvm-strip \
           OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf \
           KCFLAGS="-Wno-error -U__FORTIFY_SOURCE" \
           -j$(nproc) 2>&1 | tee build.log
@@ -179,7 +184,7 @@ jobs:
       run: |
         git clone --depth=1 https://github.com/osm0sis/AnyKernel3 anykernel
         cd anykernel
-        cp ../kernel/out/arch/arm64/boot/Image.gz-dtb . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image.gz . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image .
+        cp ../kernel/out/arch/arm64/boot/Image.gz-dtb . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image-dtb . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image.gz . 2>/dev/null || cp ../kernel/out/arch/arm64/boot/Image .
         # 通用配置: 关闭机型检测, A/B 分区
         sed -i 's/do.devicecheck=1/do.devicecheck=0/' anykernel.sh
         sed -i 's/IS_SLOT_DEVICE=0/IS_SLOT_DEVICE=1/' anykernel.sh
